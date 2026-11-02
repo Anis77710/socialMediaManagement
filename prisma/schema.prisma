@@ -1,0 +1,146 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "ts"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Platform {
+  FACEBOOK
+  INSTAGRAM
+  THREADS
+  X
+  LINKEDIN
+  TIKTOK
+  YOUTUBE
+  PINTEREST
+}
+
+enum PostStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  CANCELLED
+}
+
+enum PostTargetStatus {
+  PENDING
+  PUBLISHED
+  FAILED
+}
+
+model User {
+  id             String          @id @default(cuid())
+  email          String          @unique
+  passwordHash   String
+  name           String
+  avatarUrl      String?
+  role           Role            @default(USER)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  refreshTokens  RefreshToken[]
+  socialAccounts SocialAccount[]
+  posts          Post[]
+  media          Media[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model SocialAccount {
+  id                String       @id @default(cuid())
+  userId            String
+  platform          Platform
+  platformAccountId String
+  username          String
+  displayName       String?
+  avatarUrl         String?
+  accessToken       String
+  refreshToken      String?
+  tokenExpiresAt    DateTime?
+  isActive          Boolean      @default(true)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postTargets       PostTarget[]
+
+  @@unique([platform, platformAccountId])
+  @@index([userId])
+  @@map("social_accounts")
+}
+
+model Post {
+  id          String       @id @default(cuid())
+  userId      String
+  content     String       @db.Text
+  status      PostStatus   @default(DRAFT)
+  scheduledAt DateTime?
+  publishedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targets     PostTarget[]
+  media       Media[]
+
+  @@index([userId, status])
+  @@index([scheduledAt])
+  @@map("posts")
+}
+
+model PostTarget {
+  id              String           @id @default(cuid())
+  postId          String
+  socialAccountId String
+  platformPostId  String?
+  status          PostTargetStatus @default(PENDING)
+  error           String?
+  publishedAt     DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  post            Post             @relation(fields: [postId], references: [id], onDelete: Cascade)
+  socialAccount   SocialAccount    @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, socialAccountId])
+  @@index([socialAccountId])
+  @@map("post_targets")
+}
+
+model Media {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String   @unique
+  url       String
+  mimeType  String
+  size      Int
+  width     Int?
+  height    Int?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  posts     Post[]
+
+  @@index([userId])
+  @@map("media")
+}

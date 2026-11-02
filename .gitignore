@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Generated code
+src/generated/
+generated/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Test output
+coverage/
+.vitest/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Prisma local databases
+prisma/*.db
+prisma/*.db-journal
+
+# Editor and OS files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Caches
+.eslintcache
+.prettiercache
+.cache/
