@@ -1,0 +1,319 @@
+{
+  "info": {
+    "name": "Redflie Auth (mobile mode)",
+    "description": "Customer auth flows. Send X-Client: mobile to receive refresh tokens in the body. Set otpCode before verifying; the collection captures ids and tokens automatically.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "phone", "value": "+9779812345678" },
+    { "key": "newPhone", "value": "+9779812399999" },
+    { "key": "otpCode", "value": "123456" },
+    { "key": "challengeId", "value": "" },
+    { "key": "phoneChangeChallengeId", "value": "" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "restrictedToken", "value": "" },
+    { "key": "googleIdToken", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Public config",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/v1/public/auth/config"
+      }
+    },
+    {
+      "name": "1. Request OTP",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('accepted', () => pm.response.to.have.status(202));",
+              "pm.collectionVariables.set('challengeId', pm.response.json().challengeId);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone\": \"{{phone}}\"\n}"
+        },
+        "url": "{{baseUrl}}/v1/app/auth/otp/request"
+      }
+    },
+    {
+      "name": "2. Verify OTP (mobile)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('session issued', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('accessToken', body.accessToken);",
+              "pm.collectionVariables.set('refreshToken', body.refreshToken || '');"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Client", "value": "mobile" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"challengeId\": \"{{challengeId}}\",\n  \"code\": \"{{otpCode}}\",\n  \"consent\": {\n    \"termsVersion\": \"2026-01\",\n    \"privacyVersion\": \"2026-01\"\n  },\n  \"device\": { \"name\": \"Postman\", \"platform\": \"ANDROID\" }\n}"
+        },
+        "url": "{{baseUrl}}/v1/app/auth/otp/verify"
+      }
+    },
+    {
+      "name": "3. Refresh (mobile)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('rotated', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('accessToken', body.accessToken);",
+              "pm.collectionVariables.set('refreshToken', body.refreshToken);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Client", "value": "mobile" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+        },
+        "url": "{{baseUrl}}/v1/app/auth/refresh"
+      }
+    },
+    {
+      "name": "4. Me",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": "{{baseUrl}}/v1/app/auth/me"
+      }
+    },
+    {
+      "name": "5. Update profile",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Anish\",\n  \"locale\": \"EN\"\n}"
+        },
+        "url": "{{baseUrl}}/v1/app/auth/me"
+      }
+    },
+    {
+      "name": "6. Sessions",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": "{{baseUrl}}/v1/app/auth/sessions"
+      }
+    },
+    {
+      "name": "7. Logout current device",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": "{{baseUrl}}/v1/app/auth/logout"
+      }
+    },
+    {
+      "name": "8. Logout all devices",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": "{{baseUrl}}/v1/app/auth/logout-all"
+      }
+    },
+    {
+      "name": "Google sign-in",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const body = pm.response.json();",
+              "if (body.needsPhone) {",
+              "  pm.collectionVariables.set('restrictedToken', body.restrictedToken);",
+              "  pm.test('phone attach required', () => pm.expect(body.needsPhone).to.eql(true));",
+              "} else {",
+              "  pm.collectionVariables.set('accessToken', body.accessToken);",
+              "  pm.collectionVariables.set('refreshToken', body.refreshToken || '');",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Client", "value": "mobile" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"idToken\": \"{{googleIdToken}}\",\n  \"consent\": {\n    \"termsVersion\": \"2026-01\",\n    \"privacyVersion\": \"2026-01\"\n  }\n}"
+        },
+        "url": "{{baseUrl}}/v1/app/auth/google"
+      }
+    },
+    {
+      "name": "Google attach: request OTP",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.collectionVariables.set('challengeId', pm.response.json().challengeId);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{restrictedToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone\": \"{{phone}}\"\n}"
+        },
+        "url": "{{baseUrl}}/v1/app/auth/otp/request"
+      }
+    },
+    {
+      "name": "Google attach: verify OTP",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('session issued', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('accessToken', body.accessToken);",
+              "pm.collectionVariables.set('refreshToken', body.refreshToken || '');"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{restrictedToken}}" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Client", "value": "mobile" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"challengeId\": \"{{challengeId}}\",\n  \"code\": \"{{otpCode}}\",\n  \"consent\": {\n    \"termsVersion\": \"2026-01\",\n    \"privacyVersion\": \"2026-01\"\n  }\n}"
+        },
+        "url": "{{baseUrl}}/v1/app/auth/otp/verify"
+      }
+    },
+    {
+      "name": "Google link",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"idToken\": \"{{googleIdToken}}\"\n}"
+        },
+        "url": "{{baseUrl}}/v1/app/auth/google/link"
+      }
+    },
+    {
+      "name": "Google unlink",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": "{{baseUrl}}/v1/app/auth/google/link"
+      }
+    },
+    {
+      "name": "Phone change: request",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.collectionVariables.set('phoneChangeChallengeId', pm.response.json().challengeId);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"newPhone\": \"{{newPhone}}\"\n}"
+        },
+        "url": "{{baseUrl}}/v1/app/auth/phone-change/request"
+      }
+    },
+    {
+      "name": "Phone change: confirm",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"challengeId\": \"{{phoneChangeChallengeId}}\",\n  \"code\": \"{{otpCode}}\"\n}"
+        },
+        "url": "{{baseUrl}}/v1/app/auth/phone-change/confirm"
+      }
+    },
+    {
+      "name": "Delete account",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": "{{baseUrl}}/v1/app/auth/account/delete"
+      }
+    },
+    {
+      "name": "Cancel account deletion",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": "{{baseUrl}}/v1/app/auth/account/delete/cancel"
+      }
+    }
+  ]
+}

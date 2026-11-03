@@ -32,8 +32,8 @@ export const idParamsSchema = z.object({
 
 export const publicUserSchema = z.object({
   id: z.string(),
-  email: z.email(),
-  name: z.string(),
+  email: z.email().nullable(),
+  name: z.string().nullable(),
   avatarUrl: z.url().nullable(),
   role: roleSchema,
   createdAt: z.date(),
