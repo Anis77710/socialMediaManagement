@@ -1,4 +1,4 @@
-export type SmsPurpose = "LOGIN" | "PHONE_CHANGE" | "GOOGLE_ATTACH";
+﻿export type SmsPurpose = "LOGIN" | "PHONE_CHANGE" | "GOOGLE_ATTACH" | "ALERT";
 
 export type SmsMessage = {
   to: string;
@@ -31,3 +31,4 @@ export class SmsProviderError extends Error {
 export interface SmsAlert {
   (message: string, meta?: Record<string, unknown>): void;
 }
+
