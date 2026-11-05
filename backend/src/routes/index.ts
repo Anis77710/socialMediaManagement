@@ -1,14 +1,10 @@
-import type { FastifyPluginAsync } from "fastify";
-import { authRoutes } from "../modules/auth/auth.routes.js";
-import { mediaRoutes } from "../modules/media/media.routes.js";
-import { postRoutes } from "../modules/posts/post.routes.js";
-import { socialAccountRoutes } from "../modules/social-accounts/social-account.routes.js";
-import { userRoutes } from "../modules/users/user.routes.js";
+﻿import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 
-export const apiRoutes: FastifyPluginAsync = async (app) => {
-  await app.register(authRoutes, { prefix: "/auth" });
-  await app.register(userRoutes, { prefix: "/users" });
-  await app.register(socialAccountRoutes, { prefix: "/social-accounts" });
-  await app.register(postRoutes, { prefix: "/posts" });
-  await app.register(mediaRoutes, { prefix: "/media" });
+export const legacyRoutes: FastifyPluginAsyncZod = async (app) => {
+  app.get("/posts", { preHandler: app.requireAuth }, async () => ({ data: [] }));
 };
+
+export { appRoutes } from "./app.js";
+export { publicRoutes } from "./public.js";
+export { newAdminRoutes } from "./admin.js";
+

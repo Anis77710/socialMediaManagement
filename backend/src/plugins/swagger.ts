@@ -14,8 +14,9 @@ export const swaggerPlugin = fp(
       openapi: {
         openapi: "3.1.0",
         info: {
-          title: "Social Media Management API",
-          description: "REST API for managing social accounts, scheduled posts, and media.",
+          title: "Redflie Business OS API",
+          description:
+            "Customer auth (phone OTP, Google, rotating refresh tokens), staff/admin auth (password + TOTP, opaque sessions, RBAC), social accounts, scheduled posts and media.",
           version: "0.1.0",
         },
         servers: [
@@ -30,6 +31,11 @@ export const swaggerPlugin = fp(
               type: "http",
               scheme: "bearer",
               bearerFormat: "JWT",
+            },
+            cookieAuth: {
+              type: "apiKey",
+              in: "cookie",
+              name: "__Host-rf_admin",
             },
           },
         },

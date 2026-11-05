@@ -1,0 +1,351 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "ts"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETION_PENDING
+  DELETED
+}
+
+enum Lang {
+  NE
+  EN
+}
+
+enum Platform {
+  FACEBOOK
+  INSTAGRAM
+  THREADS
+  X
+  LINKEDIN
+  TIKTOK
+  YOUTUBE
+  PINTEREST
+}
+
+enum PostStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  CANCELLED
+}
+
+enum PostTargetStatus {
+  PENDING
+  PUBLISHED
+  FAILED
+}
+
+model User {
+  id                  String          @id @default(uuid(7))
+  phoneE164           String          @unique
+  phoneVerifiedAt     DateTime?
+  email               String?         @unique
+  googleSub           String?         @unique
+  name                String?
+  locale              Lang            @default(NE)
+  status              UserStatus      @default(ACTIVE)
+  tokenVersion        Int             @default(0)
+  lastLoginAt         DateTime?
+  deletionRequestedAt DateTime?
+  deletedAt           DateTime?
+  avatarUrl           String?
+  role                Role            @default(USER)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  sessions            Session[]
+  socialAccounts      SocialAccount[]
+  posts               Post[]
+  media               Media[]
+
+  @@map("users")
+}
+
+model Session {
+  id                String    @id @default(uuid(7))
+  userId            String
+  familyId          String
+  tokenHash         String    @unique
+  replacedById      String?
+  rotatedAt         DateTime?
+  deviceName        String?
+  platform          String?
+  userAgent         String?
+  ip                String?
+  expiresAt         DateTime
+  absoluteExpiresAt DateTime
+  revokedAt         DateTime?
+  revokeReason      String?
+  lastUsedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([familyId])
+  @@map("sessions")
+}
+
+model OtpChallenge {
+  id         String    @id @default(uuid(7))
+  phoneE164  String
+  purpose    String
+  codeHash   String
+  attempts   Int       @default(0)
+  sendCount  Int       @default(1)
+  userId     String?
+  ip         String?
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([phoneE164, createdAt])
+  @@map("otp_challenges")
+}
+
+model ConsentRecord {
+  id        String   @id @default(uuid(7))
+  userId    String
+  document  String
+  version   String
+  acceptedAt DateTime @default(now())
+  ip        String?
+
+  @@index([userId])
+  @@map("consent_records")
+}
+
+model SecurityEvent {
+  id          String   @id @default(uuid(7))
+  at          DateTime @default(now())
+  type        String
+  userId      String?
+  phoneHash   String?
+  phoneMasked String?
+  ip          String?
+  userAgent   String?
+  result      String
+  meta        Json?
+
+  @@index([userId, at])
+  @@index([phoneHash, at])
+  @@map("security_events")
+}
+
+model DenyListEntry {
+  id        String    @id @default(uuid(7))
+  kind      String
+  value     String
+  reason    String?
+  expiresAt DateTime?
+
+  @@unique([kind, value])
+  @@map("deny_list_entries")
+}
+
+model SocialAccount {
+  id                String       @id @default(cuid())
+  userId            String
+  platform          Platform
+  platformAccountId String
+  username          String
+  displayName       String?
+  avatarUrl         String?
+  accessToken       String
+  refreshToken      String?
+  tokenExpiresAt    DateTime?
+  isActive          Boolean      @default(true)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postTargets       PostTarget[]
+
+  @@unique([platform, platformAccountId])
+  @@index([userId])
+  @@map("social_accounts")
+}
+
+model Post {
+  id          String       @id @default(cuid())
+  userId      String
+  content     String       @db.Text
+  status      PostStatus   @default(DRAFT)
+  scheduledAt DateTime?
+  publishedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targets     PostTarget[]
+  media       Media[]
+
+  @@index([userId, status])
+  @@index([scheduledAt])
+  @@map("posts")
+}
+
+model PostTarget {
+  id              String           @id @default(cuid())
+  postId          String
+  socialAccountId String
+  platformPostId  String?
+  status          PostTargetStatus @default(PENDING)
+  error           String?
+  publishedAt     DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  post            Post             @relation(fields: [postId], references: [id], onDelete: Cascade)
+  socialAccount   SocialAccount    @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, socialAccountId])
+  @@index([socialAccountId])
+  @@map("post_targets")
+}
+
+model Media {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String   @unique
+  url       String
+  mimeType  String
+  size      Int
+  width     Int?
+  height    Int?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  posts     Post[]
+
+  @@index([userId])
+  @@map("media")
+}
+
+enum StaffRole {
+  SUPER_ADMIN
+  OPS
+  FINANCE
+  CONTENT
+  SUPPORT
+  REVIEWER
+}
+
+model StaffUser {
+  id                 String                @id @default(uuid(7))
+  email              String                @unique
+  name               String
+  role               StaffRole
+  status             String                @default("INVITED")
+  passwordHash       String?
+  passwordChangedAt  DateTime?
+  totpSecretEnc      String?
+  totpLastStep       BigInt?
+  mfaEnabledAt       DateTime?
+  recoveryCodeHashes String[]
+  failedLogins       Int                   @default(0)
+  lockedUntil        DateTime?
+  lastLoginAt        DateTime?
+  lastLoginIp        String?
+  createdById        String?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  sessions           StaffSession[]
+  passwordResets     StaffPasswordReset[]
+
+  @@map("staff_users")
+}
+
+model StaffInvite {
+  id          String    @id @default(uuid(7))
+  email       String
+  role        StaffRole
+  tokenHash   String    @unique
+  invitedById String
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([email])
+  @@map("staff_invites")
+}
+
+model StaffPasswordReset {
+  id        String    @id @default(uuid(7))
+  staffId   String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  staff     StaffUser @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([staffId])
+  @@map("staff_password_resets")
+}
+
+model StaffSession {
+  id                String      @id @default(uuid(7))
+  staffId           String
+  tokenHash         String      @unique
+  csrfHash          String
+  ip                String?
+  userAgent         String?
+  stepUpUntil       DateTime?
+  idleExpiresAt     DateTime
+  absoluteExpiresAt DateTime
+  lastSeenAt        DateTime?
+  revokedAt         DateTime?
+  revokeReason      String?
+  createdAt         DateTime    @default(now())
+  staff             StaffUser   @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([staffId, revokedAt])
+  @@map("staff_sessions")
+}
+
+model StaffLoginAttempt {
+  id        String   @id @default(uuid(7))
+  emailHash String
+  ip        String
+  success   Boolean
+  reason    String?
+  at        DateTime @default(now())
+
+  @@index([emailHash, at])
+  @@index([ip, at])
+  @@map("staff_login_attempts")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid(7))
+  at         DateTime @default(now())
+  actorType  String
+  actorId    String?
+  action     String
+  entityType String?
+  entityId   String?
+  before     Json?
+  after      Json?
+  reason     String?
+  ip         String?
+  requestId  String?
+  prevHash   String?
+  rowHash    String?
+
+  @@index([entityType, entityId])
+  @@index([actorId, at])
+  @@index([at])
+  @@map("audit_logs")
+}

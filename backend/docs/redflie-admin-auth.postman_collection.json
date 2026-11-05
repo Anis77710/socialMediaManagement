@@ -1,0 +1,434 @@
+{
+  "info": {
+    "name": "Redflie Admin Auth",
+    "description": "Staff auth flows for the admin console. Bootstrap the first super admin with `npm run cli -- staff:create-superadmin <email> [name]`. The collection stores the session cookie and CSRF token manually because the __Host- cookie is Secure and local HTTP Postman does not always send it. Every authenticated mutation needs Cookie, Origin and X-CSRF-Token. For enrollment, copy the secret from the start response and run `npm run totp:code -- <SECRET>` to fill `totpCode`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3001" },
+    { "key": "adminOrigin", "value": "http://localhost:3001" },
+    { "key": "adminEmail", "value": "admin@example.com" },
+    { "key": "adminPassword", "value": "Vh7!mq2Lx#9pWt4Q" },
+    { "key": "newPassword", "value": "Nq8$vT2wZ!4rLp7K" },
+    { "key": "mfaToken", "value": "" },
+    { "key": "totpSecret", "value": "" },
+    { "key": "totpCode", "value": "123456" },
+    { "key": "sessionCookie", "value": "" },
+    { "key": "csrfToken", "value": "" },
+    { "key": "recoveryCode", "value": "" },
+    { "key": "inviteToken", "value": "" },
+    { "key": "resetToken", "value": "" },
+    { "key": "targetStaffId", "value": "" },
+    { "key": "sessionId", "value": "" },
+    { "key": "customerId", "value": "" },
+    { "key": "impersonationToken", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. Login (password)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('password accepted', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('mfaToken', body.mfaToken);",
+              "pm.test('MFA or enrollment required', () => pm.expect(body.requiresMfa).to.equal(true));",
+              "console.log('enrollmentRequired:', body.enrollmentRequired);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+        },
+        "url": "{{baseUrl}}/v1/admin/auth/login"
+      }
+    },
+    {
+      "name": "2. Enrollment start (first sign-in)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('enrollment started', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('totpSecret', body.secret);",
+              "console.log('Add this secret to your authenticator:', body.secret);",
+              "console.log('Or run: npm run totp:code --', body.secret);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"mfaToken\": \"{{mfaToken}}\"\n}"
+        },
+        "url": "{{baseUrl}}/v1/admin/auth/mfa/enroll/start"
+      }
+    },
+    {
+      "name": "3. Enrollment confirm",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('enrolled and signed in', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('csrfToken', body.csrfToken);",
+              "const setCookie = pm.response.headers.get('set-cookie') || '';",
+              "pm.collectionVariables.set('sessionCookie', setCookie.split(';')[0]);",
+              "pm.collectionVariables.set('recoveryCode', body.recoveryCodes[0]);",
+              "console.log('Recovery codes:', body.recoveryCodes.join(', '));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"mfaToken\": \"{{mfaToken}}\",\n  \"code\": \"{{totpCode}}\"\n}"
+        },
+        "url": "{{baseUrl}}/v1/admin/auth/mfa/enroll/confirm"
+      }
+    },
+    {
+      "name": "4. MFA verify (returning sign-in)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('session issued', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('csrfToken', body.csrfToken);",
+              "const setCookie = pm.response.headers.get('set-cookie') || '';",
+              "pm.collectionVariables.set('sessionCookie', setCookie.split(';')[0]);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"mfaToken\": \"{{mfaToken}}\",\n  \"code\": \"{{totpCode}}\"\n}"
+        },
+        "url": "{{baseUrl}}/v1/admin/auth/mfa/verify"
+      }
+    },
+    {
+      "name": "5. Me",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Cookie", "value": "{{sessionCookie}}" }],
+        "url": "{{baseUrl}}/v1/admin/auth/me"
+      }
+    },
+    {
+      "name": "6. Step-up",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('step-up active', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Cookie", "value": "{{sessionCookie}}" },
+          { "key": "Origin", "value": "{{adminOrigin}}" },
+          { "key": "X-CSRF-Token", "value": "{{csrfToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"password\": \"{{adminPassword}}\",\n  \"code\": \"{{totpCode}}\"\n}"
+        },
+        "url": "{{baseUrl}}/v1/admin/auth/step-up"
+      }
+    },
+    {
+      "name": "7. Invite staff",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('invite created', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('targetStaffId', body.data.id);",
+              "if (body.data.devInviteUrl) {",
+              "  const token = new URL(body.data.devInviteUrl).searchParams.get('token');",
+              "  pm.collectionVariables.set('inviteToken', token);",
+              "  console.log('Invite URL:', body.data.devInviteUrl);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Cookie", "value": "{{sessionCookie}}" },
+          { "key": "Origin", "value": "{{adminOrigin}}" },
+          { "key": "X-CSRF-Token", "value": "{{csrfToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"new.staff@example.com\",\n  \"name\": \"New Staff\",\n  \"role\": \"SUPPORT\"\n}"
+        },
+        "url": "{{baseUrl}}/v1/admin/staff/invite"
+      }
+    },
+    {
+      "name": "8. Invite info (public)",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/v1/admin/auth/invites/{{inviteToken}}"
+      }
+    },
+    {
+      "name": "9. Accept invite",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"token\": \"{{inviteToken}}\",\n  \"password\": \"Rt5!yK8@pL3#nM6z\",\n  \"name\": \"New Staff\"\n}"
+        },
+        "url": "{{baseUrl}}/v1/admin/auth/invites/accept"
+      }
+    },
+    {
+      "name": "10. Forgot password",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{adminEmail}}\"\n}"
+        },
+        "url": "{{baseUrl}}/v1/admin/auth/password/forgot"
+      }
+    },
+    {
+      "name": "11. Reset password",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"token\": \"{{resetToken}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}"
+        },
+        "url": "{{baseUrl}}/v1/admin/auth/password/reset"
+      }
+    },
+    {
+      "name": "12. Staff list",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('listed', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "if (body.data.length > 0) {",
+              "  pm.collectionVariables.set('targetStaffId', body.data[0].id);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Cookie", "value": "{{sessionCookie}}" }],
+        "url": "{{baseUrl}}/v1/admin/staff?page=1&limit=20"
+      }
+    },
+    {
+      "name": "13. Update staff",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Cookie", "value": "{{sessionCookie}}" },
+          { "key": "Origin", "value": "{{adminOrigin}}" },
+          { "key": "X-CSRF-Token", "value": "{{csrfToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"DISABLED\"\n}"
+        },
+        "url": "{{baseUrl}}/v1/admin/staff/{{targetStaffId}}"
+      }
+    },
+    {
+      "name": "14. Reset staff MFA",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Cookie", "value": "{{sessionCookie}}" },
+          { "key": "Origin", "value": "{{adminOrigin}}" },
+          { "key": "X-CSRF-Token", "value": "{{csrfToken}}" }
+        ],
+        "url": "{{baseUrl}}/v1/admin/staff/{{targetStaffId}}/reset-mfa"
+      }
+    },
+    {
+      "name": "15. Revoke staff sessions",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Cookie", "value": "{{sessionCookie}}" },
+          { "key": "Origin", "value": "{{adminOrigin}}" },
+          { "key": "X-CSRF-Token", "value": "{{csrfToken}}" }
+        ],
+        "url": "{{baseUrl}}/v1/admin/staff/{{targetStaffId}}/revoke-sessions"
+      }
+    },
+    {
+      "name": "16. Regenerate recovery codes",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('regenerated', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('recoveryCode', body.recoveryCodes[0]);",
+              "console.log('Recovery codes:', body.recoveryCodes.join(', '));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Cookie", "value": "{{sessionCookie}}" },
+          { "key": "Origin", "value": "{{adminOrigin}}" },
+          { "key": "X-CSRF-Token", "value": "{{csrfToken}}" }
+        ],
+        "url": "{{baseUrl}}/v1/admin/auth/mfa/recovery-codes/regenerate"
+      }
+    },
+    {
+      "name": "17. Change password",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Cookie", "value": "{{sessionCookie}}" },
+          { "key": "Origin", "value": "{{adminOrigin}}" },
+          { "key": "X-CSRF-Token", "value": "{{csrfToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"currentPassword\": \"{{adminPassword}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}"
+        },
+        "url": "{{baseUrl}}/v1/admin/auth/password/change"
+      }
+    },
+    {
+      "name": "18. Sessions",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Cookie", "value": "{{sessionCookie}}" }],
+        "url": "{{baseUrl}}/v1/admin/auth/sessions"
+      }
+    },
+    {
+      "name": "19. Revoke one session",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          { "key": "Cookie", "value": "{{sessionCookie}}" },
+          { "key": "Origin", "value": "{{adminOrigin}}" },
+          { "key": "X-CSRF-Token", "value": "{{csrfToken}}" }
+        ],
+        "url": "{{baseUrl}}/v1/admin/auth/sessions/{{sessionId}}"
+      }
+    },
+    {
+      "name": "20. Impersonate customer",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('token issued', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('impersonationToken', body.accessToken);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Cookie", "value": "{{sessionCookie}}" },
+          { "key": "Origin", "value": "{{adminOrigin}}" },
+          { "key": "X-CSRF-Token", "value": "{{csrfToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userId\": \"{{customerId}}\",\n  \"reason\": \"Investigating support ticket\"\n}"
+        },
+        "url": "{{baseUrl}}/v1/admin/impersonation"
+      }
+    },
+    {
+      "name": "21. Read as impersonated customer",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{impersonationToken}}" }
+        ],
+        "url": "{{baseUrl}}/v1/app/auth/me"
+      }
+    },
+    {
+      "name": "22. Logout",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Cookie", "value": "{{sessionCookie}}" },
+          { "key": "Origin", "value": "{{adminOrigin}}" },
+          { "key": "X-CSRF-Token", "value": "{{csrfToken}}" }
+        ],
+        "url": "{{baseUrl}}/v1/admin/auth/logout"
+      }
+    },
+    {
+      "name": "23. Logout all devices",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Cookie", "value": "{{sessionCookie}}" },
+          { "key": "Origin", "value": "{{adminOrigin}}" },
+          { "key": "X-CSRF-Token", "value": "{{csrfToken}}" }
+        ],
+        "url": "{{baseUrl}}/v1/admin/auth/logout-all"
+      }
+    }
+  ]
+}
