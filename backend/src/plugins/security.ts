@@ -4,14 +4,10 @@ import rateLimit from "@fastify/rate-limit";
 import fp from "fastify-plugin";
 import { env } from "../config/env.js";
 
-const allowedOrigins = env.CORS_ORIGIN.split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
-
 export const securityPlugin = fp(
   async (app) => {
     await app.register(cors, {
-      origin: allowedOrigins.length === 1 ? allowedOrigins[0] : allowedOrigins,
+      origin: env.CORS_ORIGINS,
       credentials: true,
     });
 

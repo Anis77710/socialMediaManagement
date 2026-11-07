@@ -26,17 +26,19 @@ describe("health routes", () => {
     });
   });
 
-  it("returns a consistent not-found error", async () => {
+  it("returns a problem+json not-found error", async () => {
     const response = await app.inject({
       method: "GET",
       url: "/does-not-exist",
     });
 
     expect(response.statusCode).toBe(404);
+    expect(response.headers["content-type"]).toContain("application/problem+json");
     expect(response.json()).toMatchObject({
-      error: {
-        code: "NOT_FOUND",
-      },
+      type: "about:blank",
+      title: "Not Found",
+      status: 404,
+      code: "NOT_FOUND",
     });
   });
 
@@ -48,26 +50,20 @@ describe("health routes", () => {
 
     expect(response.statusCode).toBe(401);
     expect(response.json()).toMatchObject({
-      error: {
-        code: "UNAUTHORIZED",
-      },
+      code: "UNAUTHORIZED",
     });
   });
 
   it("validates request payloads", async () => {
     const response = await app.inject({
       method: "POST",
-      url: "/api/v1/auth/register",
-      payload: {
-        email: "not-an-email",
-      },
+      url: "/v1/app/auth/otp/request",
+      payload: {},
     });
 
     expect(response.statusCode).toBe(400);
     expect(response.json()).toMatchObject({
-      error: {
-        code: "VALIDATION_ERROR",
-      },
+      code: "VALIDATION_ERROR",
     });
   });
 });
